@@ -1,0 +1,10 @@
+hostname=tester5
+username=null
+password=1511
+timezone=Asia/Jakarta
+drivpath=/dev/sda
+efispath=/dev/sda5
+bootpath=/dev/sda6
+procpath=/dev/sda7
+swappath=/dev/sda8
+homepath=/dev/sda9

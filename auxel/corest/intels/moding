@@ -1,0 +1,5 @@
+#!/bin/bash
+
+function pipewire_service_enable() {
+    arch-chroot /mnt systemctl enable --global pipewire-pulse.service
+}

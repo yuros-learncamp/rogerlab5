@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -e
+
+## ENVIRONMENT
+buildroot="/install"
+deprofile=$3
+source "$buildroot/auxel/loader"
+
+
+if [[ -z $1 ]]; then
+    echo "Error : need additional paramater" &&
+    exit
+fi
+
+
+if [[ $1 == "--reset" ]];then
+    raptor_procmode="reset" && raptor_makes  
+fi
+
+
+if [[ $1 == "--install" ]];then
+    raptor_procmode="puref" && raptor_makes $deprofile
+fi

@@ -1,0 +1,503 @@
+#!/bin/bash
+
+## PREP PARTITION
+function raptor_disks_init_pure() {
+    local ismounted=$( lsblk -o lsblk -o path,mountpoint | grep "/mnt" )
+    if [[ ! -z $ismounted ]];then
+        umount -R /mnt > /dev/null 2>&1
+    fi
+}
+
+## dualboot validator team # @Al Muhdil Karim <karim@yuros.org> @Fawaz Rifqi Frasetia <fras@yuros.org>
+function raptor_disks_init_dual() {
+
+    take_efipath=($(lsblk -o path,fstype | grep vfat | awk '{print $1}'))
+
+    for item_efipath in "${take_efipath[@]}"; do
+
+        echo "check efi partition at $item_efipath" 
+        sudo mount $item_efipath /srv && sleep 2 && 
+       
+        if [[ -d "/srv/EFI/Microsoft" ]]; then
+            winefipath="$item_efipath" && mkdir -p "$item_efipath/Linux" &&
+            echo "check windows efi partition found at $item_efipath"
+            dualboot=true
+        fi
+
+        sleep 1 && sudo umount -R /srv && sleep 2
+
+    done
+}
+
+function raptor_disks_init_swip() {
+
+    if [[ $dualboot == false ]];then
+
+        read -p "Do yout want swipe partition table : [y/N] " swipe_partition_table
+
+        if [[ $swipe_partition_table == "Y" ]]||[[ $swipe_partition_table == "y" ]];then
+            sudo parted -s $drivpath mklabel gpt
+        fi
+    fi
+}
+
+function raptor_disks_init() {
+    raptor_disks_init_pure
+    raptor_disks_init_dual
+    raptor_disks_init_swip
+}
+
+## MAKE PARTITION
+function raptor_disks_make_boot() {
+
+   if [[ -z $( lsblk -o label | grep "BOOT" ) ]]; then
+        echo "create boot"
+        echo -e "n\np\n\n\n+2G\nt\n\n1\nw" | fdisk "$drivpath" > /dev/null 2>&1
+        sleep 2
+        bootpath=$(lsblk -o path | grep "$drivpath" | tail -n 1)
+        sleep 1
+    else
+        echo "prepare boot"
+        bootpath=$(lsblk -o path,label | grep "BOOT" | awk '{print $1}')
+    fi
+}
+
+function raptor_disks_make_root() {
+    
+    if [[ -z $( lsblk -o label | grep "ROOT" ) ]]; then
+        echo "create root"
+        echo -e "n\np\n\n\n+27G\nw" | fdisk "$drivpath" > /dev/null 2>&1
+        sleep 2
+        rootpath=$(lsblk -o path | grep "$drivpath" | tail -n 1)
+        sleep 1
+    else
+        echo "prepare root"
+        rootpath=$(lsblk -o path,label | grep "ROOT" | awk '{print $1}')
+    fi
+}
+
+function raptor_disks_make_swap() {
+    
+    if [[ -z $( lsblk -o path,fstype | grep "swap" ) ]]; then
+        echo "create swap"
+        echo -e "n\np\n\n\n+4G\nw" | fdisk "$drivpath" > /dev/null 2>&1
+        sleep 2
+        swappath=$(lsblk -o path | grep "$drivpath" | tail -n 1)
+        sleep 1
+    else
+        echo "prepare swap"
+        swappath=$(lsblk -o path,fstype | grep swap | awk '{print $1}' )
+    fi
+}
+
+function raptor_disks_make_home() {
+    
+    if [[ -z $( lsblk -o label | grep "HOME" ) ]]; then
+        echo "create home"
+        echo -e "n\np\n\n\n\nw" | fdisk "$drivpath" > /dev/null 2>&1
+        sleep 2
+        homepath=$(lsblk -o path | grep "$drivpath" | tail -n 1 )
+        sleep 1
+    else
+        echo "prepare home"
+        homepath=$(lsblk -o path,label | grep "HOME" | awk '{print $1}')
+    fi
+}
+
+function raptor_disks_make() {
+    echo "starting auto partitioning"
+    raptor_disks_make_boot &&
+    raptor_disks_make_root &&
+    raptor_disks_make_swap &&
+    raptor_disks_make_home
+}
+
+## PREV PARTITION
+function raptor_disks_prev() {
+    
+    clear &&
+    echo "Storage Information preview"
+    echo "--------------------------------"
+    echo "boot path : $bootpath"
+    echo "root path : $rootpath"
+    echo "swap path : $swappath"
+    echo "home path : $homepath"
+    echo "--------------------------------"
+    read -p 'Type "YES" on capital letter to continue or "NO" to abort installation' confirmdiskpartition
+
+    if [[ $confirmdiskpartition != "YES" ]];then
+        echo "Proccess cancelation by user"
+        exit 1
+    fi
+} 
+
+## FORM PARTITION
+function raptor_disks_form_boot() {
+    echo "format boot partition"
+    mkfs.vfat -F32 -S 4096 -n "BOOT" $bootpath
+}
+
+function raptor_disks_form_root() {
+    echo "format root partition"
+    mkfs.ext4 -F -q -b 4096 -L "ROOT" $rootpath
+}
+
+function raptor_disks_form_swap() {
+    echo "format swap partition"
+    mkswap $swappath
+}
+
+function raptor_disks_form_home() {
+    if [[ $raptor_procmode != "--reset" ]]; then
+        echo "format home partition"
+        mkfs.ext4 -F -q -b 4096 -L "HOME" $homepath
+    fi
+}
+
+function raptor_disks_form() {
+    raptor_disks_form_boot
+    raptor_disks_form_root
+    raptor_disks_form_swap
+    raptor_disks_form_home
+}
+
+## MONT PARTITION
+function raptor_disks_mont_root() {
+    echo "mount root partition"
+    mount $rootpath /mnt
+    mkdir -p /mnt/{home,boot}
+}
+
+function raptor_disks_mont_boot() {
+    mount -o uid=0,gid=0,dmask=007,fmask=007 $bootpath /mnt/boot
+    mkdir -p /mnt/boot/{efi,kernel,loader}
+    mkdir -p /mnt/boot/efi/{boot,linux,systemd}
+
+}
+
+function raptor_disks_mont_swap() {
+    echo "mount swap partition"
+    swapon $swappath
+}
+
+function raptor_disks_mont_home() {
+    echo "mount home partition"
+    mount $homepath /mnt/home
+}
+
+function raptor_disks_mont() {
+    raptor_disks_mont_root &&
+    raptor_disks_mont_boot &&
+    raptor_disks_mont_swap &&
+    raptor_disks_mont_home
+}
+
+function raptor_disks_prep() {
+
+    clear && echo "Partition configuration"
+    raptor_disks_init &&
+    raptor_disks_make &&
+    raptor_disks_prev &&
+    raptor_disks_form &&
+    raptor_disks_mont &&
+    echo "configration done"
+}
+
+function raptor_cores_prep_mulibs() {
+
+    local ismultilib=$(cat /etc/pacman.conf | grep "[multilib]")
+
+    if [[ -n $distro_libs32 ]]&&[[ $distro_libs32 == true ]];then
+        echo "" >>  "/etc/pacman.conf" &&
+        echo "[multilib]" >> "/etc/pacman.conf" &&
+        echo "Include = /etc/pacman.d/mirrorlist" >> "/etc/pacman.conf"
+        echo "enable multilib"
+    fi
+}
+
+function raptor_cores_prep_pacmir() {
+    test -e $pack_pacman && pacstrap /mnt - < $pack_pacman
+    if [ $? -ne 0 ]; then
+        echo "Error: raptor package installation failed." >&2
+        exit 1
+    fi
+}
+
+function craine_cores_post_config() {
+    genfstab -U /mnt > /mnt/etc/fstab &&
+    cp -fr $buildconf/* /mnt
+    if [ $? -ne 0 ]; then
+        echo "Error: raptor configuration installation failed." >&2
+        exit 1
+    fi
+}
+
+function raptor_cores_prep() {
+    
+    sleep 2 && clear
+    echo "Base module installation"
+    raptor_cores_prep_mulibs &&
+    raptor_cores_prep_pacmir &&
+    craine_cores_post_config
+}
+
+function raptor_kerns_prep_pure() {
+    rm -f /mnt/etc/mkinitcpio.conf &&
+    rm -fr /mnt/etc/mkinitcpio.conf.d 
+}
+
+function raptor_kerns_prep() {
+    sleep 2 && clear
+    echo "Kernel module installation"
+    raptor_kerns_prep_pure
+}
+
+function raptor_boots_prep() {
+    sleep 2 && clear
+    echo "Booting module installation"
+}
+
+function raptor_neter_prep() {
+    sleep 2 && clear
+    echo "Network module installation"
+}
+
+function raptor_audio_prep() {
+    sleep 2 && clear
+    echo "Audio module installation"
+}
+
+function raptor_deskt_prep() {
+    sleep 2 && clear
+    echo "Desktop module installation"
+}
+
+function raptor_mitig_prep() {
+    sleep 2 && clear
+    echo "Mitigation module installation"
+}
+
+function raptor_secur_prep() {
+    sleep 2 && clear
+    echo "Security module installation"
+}
+
+function raptor_distr_prep() {
+    sleep 2 && clear
+    echo "Distro module installation"
+}
+
+function raptor_disks_post() {
+    sleep 2 && clear
+    echo "Partition configuration"
+}
+
+function craine_cores_post_base() {
+
+    if [[ $hostaname ]];then
+        echo "$hostaname" > /mnt/etc/hostname 
+    else
+        echo "$ID" > /mnt/etc/hostname 
+    fi
+    locale-gen
+}
+
+function raptor_cores_post_time() {
+    arch-chroot /mnt ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
+    arch-chroot /mnt hwclock --systohc
+    arch-chroot /mnt timedatectl set-ntp true
+    arch-chroot /mnt timedatectl set-timezone $timezone 
+}
+
+function raptor_cores_post_user() {
+
+    echo "create administratif user"
+    arch-chroot /mnt useradd -m $username &&
+
+    echo "grant administrator role"
+    arch-chroot /mnt usermod -aG wheel $username &&
+    
+    echo "create user password"
+    echo "#!/bin/bash" > /mnt/createuser &&
+    echo "echo $username:$password | chpasswd" >> /mnt/createuser &&
+    arch-chroot /mnt /bin/bash createuser &&
+    rm /mnt/createuser
+    sleep 3
+}
+
+function raptor_cores_post_srvc() {
+    arch-chroot /mnt systemctl enable systemd-oomd
+}
+
+function raptor_cores_post() {
+    sleep 2 && clear
+    echo "Base module configuration"
+    craine_cores_post_base
+    raptor_cores_post_time
+    raptor_cores_post_user
+    raptor_cores_post_srvc
+
+    echo "Base module configured"
+
+}
+
+function raptor_kerns_post() {
+    sleep 2 && clear
+    echo "Kernel module configuration"
+}
+
+function raptor_boots_post_prep() {
+
+    if [[ -e /mnt/boot/amd-ucode.img ]]; then
+        echo "clean microcode"
+        mv /mnt/boot/amd-ucode.img /mnt/boot/kernel/ 
+    fi
+
+    if [[ -e /mnt/boot/intel-ucode.img ]]; then
+        echo "clean microcode"
+        mv /mnt/boot/intel-ucode.img /mnt/boot/kernel/ 
+    fi
+
+    if [[ -e /mnt/boot/vmlinuz-linux-zen ]]; then
+        echo "clean vmlinuz"
+        mv /mnt/boot/vmlinuz-linux-zen  /mnt/boot/kernel/ 
+    fi
+
+    if [[ -e /mnt/boot/vmlinuz-linux-hardened ]]; then
+        echo "clean vmlinuz"
+        mv /mnt/boot/vmlinuz-linux-hardened  /mnt/boot/kernel/ 
+    fi
+
+    if [[ -e /mnt/boot/vmlinuz-linux-lqx ]]; then
+        echo "clean vmlinuz"
+        mv /mnt/boot/vmlinuz-linux-lqx  /mnt/boot/kernel/ 
+    fi
+
+    if [[ -e /mnt/boot/vmlinuz-linux-lts ]]; then
+        echo "clean vmlinuz"
+        mv /mnt/boot/vmlinuz-linux-lts  /mnt/boot/kernel/ 
+    fi
+
+    echo "clean initramfs"
+    test -e /mnt/boot/initramfs*  && rm -f /mnt/boot/initramfs*
+}
+
+## boot loader @al muhdil karim <karim@yuros.org>, @achmad baihaqi <achmad@yuros.org>, @ibnu dzaky <dzaky@yuros.org>
+function raptor_boots_post_init() {
+    echo "kernel parameter boot configuration"
+    echo "root=$rootpath" > /mnt/etc/cmdline.d/01-boot.conf && 
+    echo "installation systemd boot"
+
+    if [[ $dualboot == true ]];then
+        #bootctl --esp-path=/mnt/boot/efi --boot-path=/mnt/boot/ install
+        bootctl --path=/mnt/boot/ install
+    else
+        bootctl --path=/mnt/boot/ install
+    fi
+   
+}
+
+function raptor_boots_post() {
+    sleep 2 && clear
+    echo "Booting module configuration"
+    raptor_boots_post_prep
+    raptor_boots_post_init
+}
+
+function raptor_audio_post_serve() {
+    arch-chroot /mnt systemctl enable --global pipewire-pulse.service
+}
+
+function raptor_audio_post() {
+    sleep 2 && clear
+    echo "Audio module configuration"
+    raptor_audio_post_serve 
+    echo "Audio module configured"
+}
+
+
+
+function raptor_deskt_post_serve() {
+    arch-chroot /mnt systemctl enable sddm
+    arch-chroot /mnt systemctl enable bluetooth.service
+}
+
+
+
+function raptor_deskt_post() {
+    sleep 2 && clear
+    echo "Desktop module configuration"
+    raptor_deskt_post_serve
+    echo "Desktop module configured"
+}
+
+function raptor_mitig_post() {
+    sleep 2 && clear
+    echo "Mitigation module configuration"
+}
+
+function raptor_neter_post_serve() {
+    arch-chroot /mnt systemctl enable sshd
+    arch-chroot /mnt systemctl enable NetworkManager
+    arch-chroot /mnt systemctl enable dnsmasq
+}
+
+function raptor_neter_post() {
+    sleep 2 && clear
+    echo "Network module configuration"
+    raptor_neter_post_serve
+}
+
+function raptor_secur_post_serve() {
+    arch-chroot /mnt systemctl enable firewalld
+}
+
+function raptor_secur_post() {
+    sleep 2 && clear
+    echo "Security module configuration"
+    raptor_secur_post_serve
+    echo "Security module configured"
+}
+
+function raptor_distr_post() {
+    sleep 2 && clear
+    echo "Distro module configuration"
+}
+
+function raptor_prep_install() {
+    raptor_disks_prep
+    raptor_cores_prep
+    raptor_kerns_prep
+    raptor_boots_prep
+    raptor_neter_prep
+    raptor_audio_prep
+    raptor_deskt_prep
+    raptor_mitig_prep
+    raptor_secur_prep
+    raptor_distr_prep
+}
+
+function raptor_post_install() {
+    raptor_cores_post
+    raptor_disks_post
+    raptor_kerns_post
+    raptor_boots_post
+    raptor_neter_post
+    raptor_audio_post
+    raptor_deskt_post
+    raptor_mitig_post
+    raptor_secur_post
+    raptor_distr_post
+}
+
+function raptor_post_finishe() {
+    echo "finish installation" 
+    arch-chroot /mnt mkinitcpio -P &&
+    umount -R /mnt
+}
+
+function raptor_makes() {
+    raptor_prep_install &&
+    raptor_post_install &&
+    raptor_post_finishe
+}

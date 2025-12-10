@@ -1,0 +1,61 @@
+#!/bin/bash
+
+buildauxe="$buildroot/auxel"
+builddata="$buildauxe/datum"
+buildconf="$buildauxe/config"
+buildpack="$buildauxe/packer"
+buildlibs="$buildauxe/corest"
+buildprof="$buildauxe/profile"
+
+
+
+## DISTVARS
+test -e "$builddata/raptors.conf" && source "$builddata/raptors.conf"
+
+
+## FUNCTION
+test -e "$buildauxe/makes" && source "$buildauxe/makes"
+test -e "$buildauxe/makos" && source "$buildauxe/makos"
+
+
+## PACKAGES
+pack_pacmir="$buildpack/pacmir"
+pack_packfa="$buildpack/packfa"
+pack_packco="$buildpack/packco"
+pack_pacman="$buildpack/instal"
+
+
+## microcode
+pack_ucodes=$(grep "vendor_id" /proc/cpuinfo | head -n 1 | awk '{print $3}')
+
+if [[ "$pack_ucodes" == "GenuineIntel" ]]; then
+    echo "intel-ucode" > "$pack_pacman"
+elif [[ "$pack_ucodes" == "AuthenticAMD" ]]; then
+    echo "amd-ucode"   > "$pack_pacman"
+fi
+
+
+## bluetooth
+
+
+## graphical
+
+
+## gathering
+cat $pack_pacmir >> $pack_pacman
+
+
+## PROFILING
+test -e "$buildprof/$3" && source "$buildprof/$3" 
+echo "username : $username"
+echo "password : $password"
+
+
+read -p "Do you want continue ? [Y/n]" runinstallscript
+
+if [[ $runinstallscript == "Y" ]]||[[ $runinstallscript == "y" ]];then
+    echo "start installation"
+else
+    vim "$buildprof/$3" &&
+    source "$buildprof/$3"
+fi
