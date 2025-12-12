@@ -430,6 +430,8 @@ function raptor_deskt_post_serve() {
     arch-chroot /mnt systemctl enable bluetooth.service
 }
 
+
+
 function raptor_deskt_post() {
     sleep 2 && clear
     echo "Desktop module configuration"
