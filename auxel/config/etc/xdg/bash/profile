@@ -1,0 +1,6 @@
+# YUROS BASH_PROFILE PACKAGES
+# copyright Al Muhdil Karim <karim@yuros.org>
+# ~/.bash_profile
+#
+
+[[ -f ~/.bashrc ]] && . ~/.bashrc

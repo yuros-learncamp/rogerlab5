@@ -292,7 +292,7 @@ function raptor_disks_post() {
     echo "Partition configuration"
 }
 
-function craine_cores_post_base() {
+function craine_cores_post_host() {
 
     if [[ $hostaname ]];then
         echo "$hostaname" > /mnt/etc/hostname 
@@ -300,6 +300,14 @@ function craine_cores_post_base() {
         echo "$ID" > /mnt/etc/hostname 
     fi
     locale-gen
+}
+
+function craine_cores_post_bash() {
+    rm -f /mnt/etc/bash.bash_logout
+    rm -f /mnt/etc/bash.bashrc
+    rm -f /mnt/etc/skel/.bashrc
+    rm -f /mnt/etc/skel/.bash_profile
+    rm -f /mnt/etc/skel/.bash_logout
 }
 
 function raptor_cores_post_time() {
@@ -326,13 +334,15 @@ function raptor_cores_post_user() {
 }
 
 function raptor_cores_post_srvc() {
+    arch-chroot /mnt systemctl enable systemd-timesyncd.service
     arch-chroot /mnt systemctl enable systemd-oomd
 }
 
 function raptor_cores_post() {
     sleep 2 && clear
     echo "Base module configuration"
-    craine_cores_post_base
+    craine_cores_post_bash
+    craine_cores_post_host
     raptor_cores_post_time
     raptor_cores_post_user
     raptor_cores_post_srvc
@@ -418,7 +428,7 @@ function raptor_audio_post() {
 
 
 function raptor_deskt_post_serve() {
-    arch-chroot /mnt systemctl enable sddm
+    arch-chroot /mnt systemctl enable lxdm.service
     arch-chroot /mnt systemctl enable bluetooth.service
 }
 
@@ -436,16 +446,17 @@ function raptor_mitig_post() {
     echo "Mitigation module configuration"
 }
 
-function raptor_neter_post_serve() {
+function raptor_neter_post_srvc() {
     arch-chroot /mnt systemctl enable sshd
     arch-chroot /mnt systemctl enable NetworkManager
     arch-chroot /mnt systemctl enable dnsmasq
+    arch-chroot /mnt systemctl disable NetworkManager-wait-online.service
 }
 
 function raptor_neter_post() {
     sleep 2 && clear
     echo "Network module configuration"
-    raptor_neter_post_serve
+    raptor_neter_post_srvc
 }
 
 function raptor_secur_post_serve() {
