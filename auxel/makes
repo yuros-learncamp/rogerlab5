@@ -303,8 +303,6 @@ function craine_cores_post_host() {
 }
 
 function craine_cores_post_bash() {
-    rm -f /mnt/etc/bash.bash_logout
-    rm -f /mnt/etc/bash.bashrc
     rm -f /mnt/etc/skel/.bashrc
     rm -f /mnt/etc/skel/.bash_profile
     rm -f /mnt/etc/skel/.bash_logout

@@ -22,5 +22,5 @@ fi
 
 
 # 
-# Load themes from /etc/xdg/bash/themes/
-. /etc/xdg/bash/themes/default
+# Load themes from /etc/xdg/bash/theme/
+. /etc/xdg/bash/theme/default
