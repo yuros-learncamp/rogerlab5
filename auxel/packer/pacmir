@@ -19,9 +19,13 @@ slock
 bluez
 blueman
 mozo
+eolie
 metacity
 ttf-droid
 ttf-dejavu
+secrets
+libsecret
+gnome-keyring
 network-manager-applet
 firewalld
 iptables-nft
