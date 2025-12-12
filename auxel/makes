@@ -123,7 +123,7 @@ function raptor_disks_prev() {
     echo "swap path : $swappath"
     echo "home path : $homepath"
     echo "--------------------------------"
-    read -p 'Type "YES" on capital letter to continue or "NO" to abort installation' confirmdiskpartition
+    read -p 'Type "YES" on capital letter to continue or "NO" to abort installation : ' confirmdiskpartition
 
     if [[ $confirmdiskpartition != "YES" ]];then
         echo "Proccess cancelation by user"
@@ -426,11 +426,9 @@ function raptor_audio_post() {
 
 
 function raptor_deskt_post_serve() {
-    arch-chroot /mnt systemctl enable lxdm.service
+    arch-chroot /mnt systemctl enable sddm
     arch-chroot /mnt systemctl enable bluetooth.service
 }
-
-
 
 function raptor_deskt_post() {
     sleep 2 && clear
